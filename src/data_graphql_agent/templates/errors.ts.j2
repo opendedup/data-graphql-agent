@@ -1,0 +1,49 @@
+import { GraphQLFormattedError } from 'graphql';
+
+/**
+ * Custom error formatter for GraphQL errors.
+ * Provides consistent error formatting and hides internal details in production.
+ * 
+ * @param formattedError - The formatted error from GraphQL
+ * @param error - The original error object
+ * @returns Formatted error safe for client consumption
+ */
+export function errorFormatter(
+  formattedError: GraphQLFormattedError,
+  error: unknown
+): GraphQLFormattedError {
+  // Log full error details server-side for debugging
+  console.error('GraphQL Error:', {
+    message: formattedError.message,
+    code: formattedError.extensions?.code,
+    path: formattedError.path,
+    locations: formattedError.locations,
+    originalError: error,
+  });
+
+  // In production, hide internal error details
+  if (process.env.NODE_ENV === 'production') {
+    // Don't expose internal server errors to clients
+    if (formattedError.extensions?.code === 'INTERNAL_SERVER_ERROR') {
+      return {
+        message: 'An internal server error occurred',
+        extensions: {
+          code: 'INTERNAL_SERVER_ERROR',
+        },
+      };
+    }
+
+    // Remove stack traces and other sensitive data
+    const { extensions, ...safeError } = formattedError;
+    return {
+      ...safeError,
+      extensions: {
+        code: extensions?.code || 'UNKNOWN_ERROR',
+      },
+    };
+  }
+
+  // In development, return full error details
+  return formattedError;
+}
+

@@ -1,0 +1,20 @@
+{
+  "name": "{{ project_name }}-test-client",
+  "version": "1.0.0",
+  "description": "Test client for {{ project_name }} GraphQL API",
+  "main": "dist/client.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "node dist/run-tests.js"
+  },
+  "dependencies": {
+    "@apollo/client": "^3.8.0",
+    "graphql": "^16.8.0",
+    "cross-fetch": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "typescript": "^5.2.0"
+  }
+}
+

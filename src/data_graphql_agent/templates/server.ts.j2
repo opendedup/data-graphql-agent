@@ -1,0 +1,79 @@
+import { ApolloServer } from '@apollo/server';
+import { startStandaloneServer } from '@apollo/server/standalone';
+import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
+import { typeDefs } from './typeDefs';
+import { resolvers } from './resolvers';
+import { createContext, GraphQLContext } from './context';
+import { errorFormatter } from './errors';
+import { initializeLineage, cleanupLineage } from './lineage';
+import * as dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
+
+async function startServer() {
+  // Initialize lineage tracking
+  await initializeLineage();
+
+  // Create Apollo Server with v4 configuration
+  const server = new ApolloServer<GraphQLContext>({
+    typeDefs,
+    resolvers,
+    formatError: errorFormatter,
+    plugins: [
+      // Apollo Studio landing page (local development only)
+      ApolloServerPluginLandingPageLocalDefault({ embed: true }),
+      
+      // Request logging plugin
+      {
+        async requestDidStart() {
+          const startTime = Date.now();
+          return {
+            async willSendResponse({ contextValue, errors }) {
+              const duration = Date.now() - startTime;
+              if (errors && errors.length > 0) {
+                console.error(`[${contextValue.requestId}] Request failed after ${duration}ms`, {
+                  errorCount: errors.length,
+                });
+              } else {
+                console.log(`[${contextValue.requestId}] Request completed in ${duration}ms`);
+              }
+            },
+          };
+        },
+      },
+    ],
+    // Disable introspection in production
+    introspection: process.env.NODE_ENV !== 'production',
+  });
+
+  // Start the server with context
+  const { url } = await startStandaloneServer(server, {
+    listen: { port: parseInt(process.env.PORT || '4000') },
+    context: createContext,
+  });
+
+  console.log(`🚀 Server ready at ${url}`);
+  console.log(`🏥 Health check at ${url}.well-known/apollo/server-health`);
+  console.log(`📊 GraphQL Playground at ${url}`);
+  console.log(`🔍 Introspection: ${process.env.NODE_ENV !== 'production' ? 'enabled' : 'disabled'}`);
+
+  // Handle graceful shutdown
+  process.on('SIGTERM', async () => {
+    console.log('SIGTERM received, cleaning up lineage...');
+    await cleanupLineage();
+    process.exit(0);
+  });
+
+  process.on('SIGINT', async () => {
+    console.log('SIGINT received, cleaning up lineage...');
+    await cleanupLineage();
+    process.exit(0);
+  });
+}
+
+startServer().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});
+

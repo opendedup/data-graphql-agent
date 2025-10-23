@@ -1,0 +1,306 @@
+# {{ project_name }} GraphQL API
+
+Auto-generated Apollo GraphQL Server with BigQuery integration and Dataplex lineage tracking.
+
+## Overview
+
+This GraphQL API provides access to BigQuery data through a type-safe GraphQL interface built with Apollo Server v4 best practices. It includes:
+
+- **Apollo Server v4** with plugins, context, and error formatting
+- **Type-safe Resolvers** with full TypeScript support
+- **BigQuery Integration** with connection pooling
+- **Dataplex Lineage** for end-to-end data governance
+- **Request Tracing** with unique request IDs
+- **Production-ready Error Handling** with safe error messages
+- **Docker Support** for containerized deployment
+
+## Generated Queries
+
+{% for query in queries %}
+### `{{ query.queryName }}`
+
+**SQL:**
+```sql
+{{ query.sql }}
+```
+
+**Source Tables:**
+{% for table in query.source_tables %}
+- `{{ table }}`
+{% endfor %}
+
+{% endfor %}
+
+## Setup
+
+### Prerequisites
+
+- Node.js 18+
+- Google Cloud account with BigQuery access
+- Docker (optional, for containerized deployment)
+
+### Installation
+
+```bash
+npm install
+```
+
+### Configuration
+
+Create a `.env` file or set environment variables:
+
+```bash
+# BigQuery Configuration
+BIGQUERY_PROJECT_ID=your-project-id
+BIGQUERY_LOCATION=US
+
+# Dataplex Lineage Configuration
+DATAPLEX_PROJECT_ID=your-project-id
+DATAPLEX_LOCATION=us-central1
+
+# Server Configuration
+PORT=4000
+```
+
+### Running Locally
+
+```bash
+# Development mode
+npm run dev
+
+# Production mode
+npm run build
+npm start
+```
+
+The API will be available at `http://localhost:4000/graphql`
+
+### Running with Docker
+
+```bash
+# Build and run
+docker-compose up --build
+
+# Run in detached mode
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop
+docker-compose down
+```
+
+### Running Tests
+
+```bash
+# Build and run tests
+cd test-client
+npm install
+npm test
+```
+
+Or using Docker Compose:
+
+```bash
+docker-compose -f docker-compose.test.yml up --build
+```
+
+## GraphQL Schema
+
+The complete schema is defined in `src/typeDefs.ts`. You can explore it using:
+
+- GraphQL Playground: `http://localhost:4000/graphql`
+- Apollo Sandbox: Connect to your endpoint
+
+## Data Lineage
+
+This API automatically tracks data lineage in Google Cloud Dataplex:
+
+- **Process**: Each GraphQL resolver is registered as a process
+- **Run**: Each query execution creates a run
+- **Lineage Events**: Link BigQuery source tables to BI report targets
+
+Lineage events are created asynchronously and don't block API responses.
+
+## Architecture
+
+### Apollo Server v4 Features
+
+This generated server uses Apollo Server v4 with the following features:
+
+- **Context Management**: Request-scoped BigQuery client and request ID
+- **Error Formatting**: Production-safe error messages hiding internal details
+- **Plugins**: Request logging and Apollo landing page
+- **Type Safety**: Full TypeScript typing for resolvers and context
+- **Health Checks**: Built-in `/.well-known/apollo/server-health` endpoint
+
+### Project Structure
+
+```
+src/
+├── server.ts       # Apollo Server v4 setup with plugins
+├── context.ts      # GraphQL context factory with BigQuery client
+├── errors.ts       # Custom error formatter for production safety
+├── typeDefs.ts     # GraphQL schema definitions
+├── resolvers.ts    # Type-safe query resolvers
+└── lineage.ts      # Dataplex lineage integration with request tracking
+```
+
+### Request Flow
+
+```
+GraphQL Request
+    ↓
+[Context Created: Request ID + BigQuery Client]
+    ↓
+[Resolver Executes]
+    ↓
+[BigQuery Query] → [Lineage Event (async)]
+    ↓
+[Error Formatter (if error)]
+    ↓
+[Response with Request ID in logs]
+```
+
+## Deployment
+
+### Cloud Run
+
+```bash
+# Build and push to GCR
+gcloud builds submit --tag gcr.io/PROJECT_ID/{{ project_name }}-api
+
+# Deploy to Cloud Run
+gcloud run deploy {{ project_name }}-api \
+  --image gcr.io/PROJECT_ID/{{ project_name }}-api \
+  --platform managed \
+  --region us-central1 \
+  --set-env-vars BIGQUERY_PROJECT_ID=PROJECT_ID,DATAPLEX_PROJECT_ID=PROJECT_ID
+```
+
+### Kubernetes
+
+```bash
+# Build and push
+docker build -t {{ project_name }}-api .
+docker push your-registry/{{ project_name }}-api
+
+# Deploy (create your k8s manifests)
+kubectl apply -f k8s/
+```
+
+## Adding Authentication
+
+The generated server includes a placeholder for authentication in the context. To add authentication:
+
+### 1. Update Context Interface
+
+Edit `src/context.ts`:
+
+```typescript
+export interface GraphQLContext {
+  requestId: string;
+  bigquery: BigQuery;
+  startTime: number;
+  user?: {
+    id: string;
+    email: string;
+    roles: string[];
+  };
+}
+```
+
+### 2. Add Auth Plugin
+
+Create `src/auth.ts`:
+
+```typescript
+import { GraphQLError } from 'graphql';
+
+export async function authenticateUser(token: string) {
+  // Validate JWT or API key
+  // Return user object or throw error
+}
+```
+
+### 3. Update Context Factory
+
+```typescript
+export async function createContext({ req }): Promise<GraphQLContext> {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const user = token ? await authenticateUser(token) : undefined;
+  
+  return {
+    requestId: uuidv4(),
+    bigquery: new BigQuery({...}),
+    startTime: Date.now(),
+    user,
+  };
+}
+```
+
+### 4. Protect Resolvers
+
+```typescript
+{{ query.queryName }}: async (_parent, _args, context) => {
+  if (!context.user) {
+    throw new GraphQLError('Unauthenticated', {
+      extensions: { code: 'UNAUTHENTICATED' }
+    });
+  }
+  
+  // Check roles if needed
+  if (!context.user.roles.includes('analyst')) {
+    throw new GraphQLError('Unauthorized', {
+      extensions: { code: 'FORBIDDEN' }
+    });
+  }
+  
+  // Execute query...
+}
+```
+
+## Troubleshooting
+
+### Authentication Errors
+
+Ensure your environment has valid GCP credentials:
+
+```bash
+gcloud auth application-default login
+```
+
+Or use a service account:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+```
+
+### BigQuery Permissions
+
+Required IAM roles:
+- `roles/bigquery.dataViewer` - Read data
+- `roles/bigquery.jobUser` - Execute queries
+
+### Lineage Permissions
+
+Required IAM roles:
+- `roles/datacatalog.lineageAdmin` - Create lineage events
+
+### Request Tracing
+
+All requests are logged with unique request IDs. Find logs by searching for:
+
+```bash
+docker-compose logs | grep "[REQUEST_ID]"
+```
+
+### Error Debugging
+
+In development, full error details are returned. In production, errors are sanitized. Check server logs for full stack traces.
+
+## License
+
+MIT
+

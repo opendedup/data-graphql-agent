@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  graphql-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      - BIGQUERY_PROJECT_ID=${BIGQUERY_PROJECT_ID}
+      - BIGQUERY_LOCATION=${BIGQUERY_LOCATION:-US}
+      - DATAPLEX_PROJECT_ID=${DATAPLEX_PROJECT_ID}
+      - DATAPLEX_LOCATION=${DATAPLEX_LOCATION:-us-central1}
+      - PORT=4000
+    volumes:
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+
+  test-client:
+    build:
+      context: ./test-client
+      dockerfile: Dockerfile
+    depends_on:
+      - graphql-api
+    environment:
+      - GRAPHQL_ENDPOINT=http://graphql-api:4000/graphql
+    command: ["npm", "test"]
+

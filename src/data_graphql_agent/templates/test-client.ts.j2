@@ -1,0 +1,44 @@
+import { ApolloClient, InMemoryCache, gql, HttpLink } from '@apollo/client';
+import fetch from 'cross-fetch';
+
+const GRAPHQL_ENDPOINT = process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql';
+
+// Create Apollo Client
+const client = new ApolloClient({
+  link: new HttpLink({
+    uri: GRAPHQL_ENDPOINT,
+    fetch,
+  }),
+  cache: new InMemoryCache(),
+});
+
+// Test queries
+export const testQueries = {
+{% for query in queries %}
+  {{ query.queryName }}: gql`
+    query Test{{ query.queryName | title }} {
+      {{ query.queryName }} {
+        # Add expected fields here based on schema
+      }
+    }
+  `,
+{% endfor %}
+};
+
+export async function executeQuery(queryName: string) {
+  const query = testQueries[queryName];
+  if (!query) {
+    throw new Error(`Query ${queryName} not found`);
+  }
+
+  try {
+    const result = await client.query({ query });
+    return result;
+  } catch (error) {
+    console.error(`Error executing ${queryName}:`, error);
+    throw error;
+  }
+}
+
+export { client };
+

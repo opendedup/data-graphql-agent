@@ -1,0 +1,42 @@
+import { BigQuery } from '@google-cloud/bigquery';
+import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * GraphQL context interface.
+ * Contains request-scoped data available to all resolvers.
+ */
+export interface GraphQLContext {
+  /** Unique request ID for tracing and logging */
+  requestId: string;
+  
+  /** BigQuery client instance */
+  bigquery: BigQuery;
+  
+  /** Request start timestamp for performance monitoring */
+  startTime: number;
+  
+  // Add authentication context when needed:
+  // user?: {
+  //   id: string;
+  //   email: string;
+  //   roles: string[];
+  // };
+}
+
+/**
+ * Creates GraphQL context for each request.
+ * Called by Apollo Server for every GraphQL request.
+ * 
+ * @returns Promise resolving to GraphQLContext
+ */
+export async function createContext(): Promise<GraphQLContext> {
+  return {
+    requestId: uuidv4(),
+    bigquery: new BigQuery({
+      projectId: process.env.BIGQUERY_PROJECT_ID,
+      location: process.env.BIGQUERY_LOCATION || 'US',
+    }),
+    startTime: Date.now(),
+  };
+}
+

@@ -1,0 +1,41 @@
+import { executeQuery, testQueries } from './client';
+
+async function runTests() {
+  console.log('Starting GraphQL API tests...\n');
+
+  let passed = 0;
+  let failed = 0;
+
+  for (const queryName of Object.keys(testQueries)) {
+    try {
+      console.log(`Testing query: ${queryName}`);
+      const result = await executeQuery(queryName);
+      
+      if (result.data) {
+        console.log(`✓ ${queryName} passed`);
+        console.log(`  Data:`, JSON.stringify(result.data, null, 2).substring(0, 200));
+        passed++;
+      } else {
+        console.log(`✗ ${queryName} failed: No data returned`);
+        failed++;
+      }
+    } catch (error) {
+      console.log(`✗ ${queryName} failed:`, error.message);
+      failed++;
+    }
+    console.log('');
+  }
+
+  console.log('Test Summary:');
+  console.log(`  Passed: ${passed}`);
+  console.log(`  Failed: ${failed}`);
+  console.log(`  Total: ${passed + failed}`);
+
+  process.exit(failed > 0 ? 1 : 0);
+}
+
+runTests().catch((error) => {
+  console.error('Test runner failed:', error);
+  process.exit(1);
+});
+
