@@ -1,18 +1,21 @@
 import { GraphQLError } from 'graphql';
 import { GraphQLContext } from './context';
-import { createLineageEvent } from './lineage';
+import { DateTimeScalar } from './scalars';
 
 /**
  * GraphQL resolvers for {{ project_name }}.
  * Auto-generated from BigQuery queries with type-safe context.
  */
 export const resolvers = {
+  // Custom scalar resolvers
+  DateTime: DateTimeScalar,
+
   Query: {
 {% for query in queries %}
     /**
      * Resolver for {{ query.queryName }}.
      * 
-     * Executes BigQuery query and tracks lineage.
+     * Executes BigQuery query.
      * Source tables: {{ query.source_tables | join(', ') }}
      */
     {{ query.queryName }}: async (
@@ -21,7 +24,7 @@ export const resolvers = {
       context: GraphQLContext
     ): Promise<any[]> => {
       const { bigquery, requestId } = context;
-      const sql = `{{ query.sql }}`;
+      const sql = `{{ query.sql | replace('`', '\\`') | replace('${', '\\${') }}`;
       
       try {
         console.log(`[${requestId}] Executing: {{ query.queryName }}`);
@@ -32,18 +35,9 @@ export const resolvers = {
           location: process.env.BIGQUERY_LOCATION || 'US',
         });
 
-        // Fire-and-forget lineage reporting (async, non-blocking)
-        createLineageEvent({
-          processId: 'resolver:{{ query.queryName }}',
-          sources: {{ query.source_tables | tojson }},
-          target: `custom:bi-report:{{ project_name }}.{{ query.queryName }}`,
-          sql: sql,
-          requestId: requestId,
-        }).catch((error) => {
-          console.error(`[${requestId}] Lineage error:`, error);
-        });
-
         console.log(`[${requestId}] Returned ${rows.length} rows from {{ query.queryName }}`);
+        
+        // Return rows directly - DateTime scalar will handle serialization
         return rows;
       } catch (error) {
         console.error(`[${requestId}] Query error in {{ query.queryName }}:`, error);

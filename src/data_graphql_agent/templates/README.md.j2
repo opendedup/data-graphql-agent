@@ -1,6 +1,6 @@
 # {{ project_name }} GraphQL API
 
-Auto-generated Apollo GraphQL Server with BigQuery integration and Dataplex lineage tracking.
+Auto-generated Apollo GraphQL Server with BigQuery integration.
 
 ## Overview
 
@@ -9,7 +9,6 @@ This GraphQL API provides access to BigQuery data through a type-safe GraphQL in
 - **Apollo Server v4** with plugins, context, and error formatting
 - **Type-safe Resolvers** with full TypeScript support
 - **BigQuery Integration** with connection pooling
-- **Dataplex Lineage** for end-to-end data governance
 - **Request Tracing** with unique request IDs
 - **Production-ready Error Handling** with safe error messages
 - **Docker Support** for containerized deployment
@@ -53,10 +52,6 @@ Create a `.env` file or set environment variables:
 # BigQuery Configuration
 BIGQUERY_PROJECT_ID=your-project-id
 BIGQUERY_LOCATION=US
-
-# Dataplex Lineage Configuration
-DATAPLEX_PROJECT_ID=your-project-id
-DATAPLEX_LOCATION=us-central1
 
 # Server Configuration
 PORT=4000
@@ -113,16 +108,6 @@ The complete schema is defined in `src/typeDefs.ts`. You can explore it using:
 - GraphQL Playground: `http://localhost:4000/graphql`
 - Apollo Sandbox: Connect to your endpoint
 
-## Data Lineage
-
-This API automatically tracks data lineage in Google Cloud Dataplex:
-
-- **Process**: Each GraphQL resolver is registered as a process
-- **Run**: Each query execution creates a run
-- **Lineage Events**: Link BigQuery source tables to BI report targets
-
-Lineage events are created asynchronously and don't block API responses.
-
 ## Architecture
 
 ### Apollo Server v4 Features
@@ -143,8 +128,7 @@ src/
 ├── context.ts      # GraphQL context factory with BigQuery client
 ├── errors.ts       # Custom error formatter for production safety
 ├── typeDefs.ts     # GraphQL schema definitions
-├── resolvers.ts    # Type-safe query resolvers
-└── lineage.ts      # Dataplex lineage integration with request tracking
+└── resolvers.ts    # Type-safe query resolvers
 ```
 
 ### Request Flow
@@ -156,7 +140,7 @@ GraphQL Request
     ↓
 [Resolver Executes]
     ↓
-[BigQuery Query] → [Lineage Event (async)]
+[BigQuery Query]
     ↓
 [Error Formatter (if error)]
     ↓
@@ -243,7 +227,8 @@ export async function createContext({ req }): Promise<GraphQLContext> {
 ### 4. Protect Resolvers
 
 ```typescript
-{{ query.queryName }}: async (_parent, _args, context) => {
+// Example: protecting queryName
+queryName: async (_parent, _args, context) => {
   if (!context.user) {
     throw new GraphQLError('Unauthenticated', {
       extensions: { code: 'UNAUTHENTICATED' }
@@ -282,11 +267,6 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 Required IAM roles:
 - `roles/bigquery.dataViewer` - Read data
 - `roles/bigquery.jobUser` - Execute queries
-
-### Lineage Permissions
-
-Required IAM roles:
-- `roles/datacatalog.lineageAdmin` - Create lineage events
 
 ### Request Tracing
 

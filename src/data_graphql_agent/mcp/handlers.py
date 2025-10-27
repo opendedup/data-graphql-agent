@@ -1,7 +1,10 @@
 """MCP tool handlers for executing tool requests."""
 
 import os
+import logging
+from datetime import datetime
 from typing import Any, Dict
+import traceback
 
 from ..models.request_models import GenerateGraphQLRequest, ValidateSchemaRequest
 from ..models.response_models import (
@@ -13,6 +16,8 @@ from ..generation.project_generator import ProjectGenerator
 from ..clients.storage_client import StorageClient
 from ..validation import CodeValidator, ValidationLevel
 from .config import load_config
+
+logger = logging.getLogger(__name__)
 
 
 async def handle_generate_graphql_api(arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -29,33 +34,66 @@ async def handle_generate_graphql_api(arguments: Dict[str, Any]) -> Dict[str, An
         config = load_config()
 
         # Validate and parse request
+        logger.info("Parsing and validating request...")
         request = GenerateGraphQLRequest(**arguments)
+        logger.info("Request validated successfully.")
 
         # Parse validation settings
         validation_level_str = arguments.get("validation_level", "standard")
         validation_level = ValidationLevel(validation_level_str)
         auto_fix = arguments.get("auto_fix", False)
 
-        # Determine output path
-        output_path = request.output_path or config.graphql_output_dir
+        # Determine base output path
+        base_output_path = request.output_path or config.graphql_output_dir
+        
+        # Create timestamped subfolder: project_name/graphql_<timestamp>/
+        # Convert to lowercase for case-insensitive folder names
+        sanitized_project_name = request.project_name.lower().replace(' ', '_').replace('-', '_')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_path = os.path.join(base_output_path, sanitized_project_name, f'graphql_{timestamp}')
 
         # Generate project
+        logger.info("Initializing ProjectGenerator...")
         project_generator = ProjectGenerator(config.gcp_project_id)
+        logger.info("Generating project files...")
+        
+        # Prepare API metadata for schema generation
+        api_metadata = None
+        if request.insight or request.summary or request.dataset_count or request.execution_time_ms:
+            api_metadata = {
+                "insight": request.insight,
+                "summary": request.summary,
+                "dataset_count": request.dataset_count,
+                "execution_time_ms": request.execution_time_ms,
+                "total_queries": len(request.queries),
+            }
+        
         generated_files = project_generator.generate_project(
             project_name=request.project_name,
             queries=request.queries,
+            api_metadata=api_metadata,
         )
+        logger.info(f"{len(generated_files)} project files generated in memory.")
 
         # Validate generated code
+        logger.info("Initializing CodeValidator...")
         validator = CodeValidator(config.gcp_project_id)
+        logger.info(f"Starting code validation (level: {validation_level.value})...")
         validation_result = await validator.validate(
             files=generated_files,
             queries=request.queries,
             validation_level=validation_level,
         )
+        logger.info("Code validation complete.")
 
         # Handle validation failures
         if not validation_result.is_valid:
+            logger.error(f"Code validation failed at {validation_level.value} level")
+            logger.error(f"Validation errors: {validation_result.errors}")
+            
+            if validation_result.can_auto_fix:
+                logger.info("Auto-fix is available but not enabled. To enable it, set 'auto_fix': true in your request arguments.")
+            
             if auto_fix and validation_result.can_auto_fix:
                 # TODO: Implement auto-fix logic
                 # For now, just return the error
@@ -72,8 +110,10 @@ async def handle_generate_graphql_api(arguments: Dict[str, Any]) -> Dict[str, An
             return error_response.model_dump()
 
         # Write validated files to storage
+        logger.info("Writing validated files to storage...")
         storage_client = StorageClient(config.gcp_project_id)
         file_manifests = storage_client.write_files(output_path, generated_files)
+        logger.info("Files written successfully.")
 
         # Build response with validation results
         response = GenerateGraphQLResponse(
@@ -88,6 +128,7 @@ async def handle_generate_graphql_api(arguments: Dict[str, Any]) -> Dict[str, An
         return response.model_dump()
 
     except Exception as e:
+        logger.error(f"Failed to generate GraphQL API: {e}", exc_info=True)
         error_response = GenerateGraphQLResponse(
             success=False,
             output_path=arguments.get("output_path", ""),

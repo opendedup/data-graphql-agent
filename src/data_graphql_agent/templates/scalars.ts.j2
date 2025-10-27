@@ -1,0 +1,60 @@
+import { GraphQLScalarType, Kind } from 'graphql';
+
+/**
+ * Custom DateTime scalar for handling date and time values.
+ * 
+ * Accepts and returns ISO 8601 formatted strings.
+ * Handles BigQuery TIMESTAMP, DATE, and DATETIME types.
+ */
+export const DateTimeScalar = new GraphQLScalarType({
+  name: 'DateTime',
+  description: 'Custom scalar for date and time values in ISO 8601 format',
+
+  // Serialize value sent to client (from BigQuery to GraphQL response)
+  serialize(value: unknown): string {
+    // If BigQuery returns an object with 'value' property
+    if (value && typeof value === 'object' && 'value' in value) {
+      return String((value as any).value);
+    }
+    
+    // If it's already a string (ISO 8601)
+    if (typeof value === 'string') {
+      return value;
+    }
+    
+    // If it's a Date object
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    
+    // Fallback: convert to string
+    return String(value);
+  },
+
+  // Parse value from client (from GraphQL input to internal representation)
+  parseValue(value: unknown): string {
+    if (typeof value === 'string') {
+      // Validate ISO 8601 format
+      const date = new Date(value);
+      if (isNaN(date.getTime())) {
+        throw new Error(`Invalid DateTime value: ${value}`);
+      }
+      return value;
+    }
+    throw new Error(`DateTime cannot represent non-string value: ${value}`);
+  },
+
+  // Parse value from AST (from GraphQL query literals)
+  parseLiteral(ast): string {
+    if (ast.kind === Kind.STRING) {
+      // Validate ISO 8601 format
+      const date = new Date(ast.value);
+      if (isNaN(date.getTime())) {
+        throw new Error(`Invalid DateTime literal: ${ast.value}`);
+      }
+      return ast.value;
+    }
+    throw new Error(`DateTime cannot represent non-string literal`);
+  },
+});
+

@@ -179,7 +179,7 @@ class StorageClient:
             "src/server.ts": "Main Apollo Server entry point",
             "src/typeDefs.ts": "GraphQL schema definitions",
             "src/resolvers.ts": "GraphQL resolver implementations",
-            "src/lineage.ts": "Dataplex lineage integration",
+            "src/scalars.ts": "Custom GraphQL scalar type implementations",
             "src/types.ts": "TypeScript type definitions",
         }
 

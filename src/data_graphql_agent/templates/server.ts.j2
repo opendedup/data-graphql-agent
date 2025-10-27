@@ -5,15 +5,12 @@ import { typeDefs } from './typeDefs';
 import { resolvers } from './resolvers';
 import { createContext, GraphQLContext } from './context';
 import { errorFormatter } from './errors';
-import { initializeLineage, cleanupLineage } from './lineage';
 import * as dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
 
 async function startServer() {
-  // Initialize lineage tracking
-  await initializeLineage();
 
   // Create Apollo Server with v4 configuration
   const server = new ApolloServer<GraphQLContext>({
@@ -60,14 +57,12 @@ async function startServer() {
 
   // Handle graceful shutdown
   process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, cleaning up lineage...');
-    await cleanupLineage();
+    console.log('SIGTERM received, shutting down...');
     process.exit(0);
   });
 
   process.on('SIGINT', async () => {
-    console.log('SIGINT received, cleaning up lineage...');
-    await cleanupLineage();
+    console.log('SIGINT received, shutting down...');
     process.exit(0);
   });
 }

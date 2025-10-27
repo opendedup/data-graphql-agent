@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .schema_generator import SchemaGenerator
@@ -34,13 +34,17 @@ class ProjectGenerator:
         self.jinja_env.filters["title"] = self._title_case
 
     def generate_project(
-        self, project_name: str, queries: List[QueryInput]
+        self, 
+        project_name: str, 
+        queries: List[QueryInput],
+        api_metadata: Optional[Dict[str, any]] = None
     ) -> Dict[str, str]:
         """Generate complete Apollo Server project.
 
         Args:
             project_name: Name of the project
             queries: List of query inputs
+            api_metadata: Optional metadata about the API (insight, summary, etc.)
 
         Returns:
             Dictionary mapping file paths to file contents
@@ -53,13 +57,18 @@ class ProjectGenerator:
                 "queryName": q.query_name,
                 "sql": q.sql,
                 "source_tables": q.source_tables,
+                "description": q.description,
+                "alignment_score": q.alignment_score,
+                "iterations": q.iterations,
+                "generation_time_ms": q.generation_time_ms,
+                "validation_details": q.validation_details,
             }
             for q in queries
         ]
 
-        # Generate GraphQL schema
+        # Generate GraphQL schema with metadata
         schema_text, field_schemas = self.schema_generator.generate_schema_from_queries(
-            query_dicts
+            query_dicts, api_metadata
         )
 
         # Prepare template context
@@ -87,7 +96,9 @@ class ProjectGenerator:
         files["src/server.ts"] = self._render_template("server.ts.j2", context)
         files["src/typeDefs.ts"] = self._render_template("typeDefs.ts.j2", context)
         files["src/resolvers.ts"] = self._render_template("resolvers.ts.j2", context)
-        files["src/lineage.ts"] = self._render_template("lineage.ts.j2", context)
+        files["src/scalars.ts"] = self._render_template("scalars.ts.j2", context)
+        files["src/context.ts"] = self._render_template("context.ts.j2", context)
+        files["src/errors.ts"] = self._render_template("errors.ts.j2", context)
 
         # Generate test client
         files["test-client/package.json"] = self._render_template(
@@ -139,10 +150,6 @@ class ProjectGenerator:
         return """# BigQuery Configuration
 BIGQUERY_PROJECT_ID=your-project-id
 BIGQUERY_LOCATION=US
-
-# Dataplex Lineage Configuration
-DATAPLEX_PROJECT_ID=your-project-id
-DATAPLEX_LOCATION=us-central1
 
 # Server Configuration
 PORT=4000

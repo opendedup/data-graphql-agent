@@ -29,9 +29,11 @@ class GraphQLValidator:
         if not re.search(r"type\s+Query\s*\{", schema):
             errors.append("Schema must contain a Query type")
 
-        # Check for balanced braces
-        open_braces = schema.count("{")
-        close_braces = schema.count("}")
+        # Check for balanced braces (excluding braces in description strings)
+        # Remove description strings before counting braces
+        schema_without_descriptions = re.sub(r'""".*?"""', '', schema, flags=re.DOTALL)
+        open_braces = schema_without_descriptions.count("{")
+        close_braces = schema_without_descriptions.count("}")
         if open_braces != close_braces:
             errors.append(
                 f"Unbalanced braces in schema (open: {open_braces}, close: {close_braces})"
@@ -82,15 +84,21 @@ class GraphQLValidator:
         Returns:
             Extracted GraphQL schema
         """
-        # Look for template literal pattern: `...`
-        match = re.search(r"export\s+const\s+typeDefs\s*=\s*`([^`]+)`", content, re.DOTALL)
+        # Look for template literal pattern: export const typeDefs = `...`;
+        # Need to handle escaped backticks in the content
+        match = re.search(r"export\s+const\s+typeDefs\s*=\s*`(.*?)`\s*;", content, re.DOTALL)
         if match:
-            return match.group(1)
+            schema = match.group(1)
+            # Unescape any escaped backticks for validation
+            schema = schema.replace('\\`', '`').replace('\\$', '$')
+            return schema
 
         # Alternative pattern with multiline template
         match = re.search(r"`\s*(type\s+\w+.*?)`", content, re.DOTALL)
         if match:
-            return match.group(1)
+            schema = match.group(1)
+            schema = schema.replace('\\`', '`').replace('\\$', '$')
+            return schema
 
         return ""
 

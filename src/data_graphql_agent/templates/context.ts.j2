@@ -30,11 +30,18 @@ export interface GraphQLContext {
  * @returns Promise resolving to GraphQLContext
  */
 export async function createContext(): Promise<GraphQLContext> {
+  const projectId = process.env.BIGQUERY_PROJECT_ID;
+  if (!projectId) {
+    throw new Error('BIGQUERY_PROJECT_ID environment variable is required');
+  }
+
+  const location = process.env.BIGQUERY_LOCATION || 'US';
+
   return {
     requestId: uuidv4(),
     bigquery: new BigQuery({
-      projectId: process.env.BIGQUERY_PROJECT_ID,
-      location: process.env.BIGQUERY_LOCATION || 'US',
+      projectId: projectId,
+      location: location,
     }),
     startTime: Date.now(),
   };

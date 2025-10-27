@@ -2,6 +2,7 @@
 
 import tempfile
 import shutil
+import logging
 from enum import Enum
 from typing import Dict, List, Optional
 from pathlib import Path
@@ -13,6 +14,8 @@ from .graphql_validator import GraphQLValidator
 from .sql_validator import SQLValidator
 from .typescript_validator import TypeScriptValidator
 from .docker_validator import DockerValidator
+
+logger = logging.getLogger(__name__)
 
 
 class ValidationLevel(str, Enum):
@@ -141,7 +144,7 @@ class CodeValidator:
             "src/server.ts",
             "src/typeDefs.ts",
             "src/resolvers.ts",
-            "src/lineage.ts",
+            "src/scalars.ts",
             "src/context.ts",
             "src/errors.ts",
         ]
@@ -174,20 +177,29 @@ class CodeValidator:
             files: Generated files
             result: Validation result to update
         """
+        logger.info(f"Running standard validation on {len(files)} files")
+        logger.info(f"Files to validate: {sorted(files.keys())}")
+        
         # Write files to temporary directory for TypeScript compilation check
+        logger.info("Creating temporary directory for TypeScript compilation check...")
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
+            logger.info(f"Temporary directory created: {temp_dir}")
 
             # Write all files
+            logger.info("Writing files to temporary directory...")
             for file_path, content in files.items():
                 full_path = temp_path / file_path
                 full_path.parent.mkdir(parents=True, exist_ok=True)
                 full_path.write_text(content, encoding="utf-8")
+            logger.info(f"Successfully wrote {len(files)} files to temporary directory")
 
             # Run TypeScript compilation check
+            logger.info("Starting TypeScript compilation check...")
             is_valid, error_message = await self.typescript_validator.validate_compilation(
                 temp_dir
             )
+            logger.info(f"TypeScript compilation check completed. Valid: {is_valid}")
 
             if not is_valid:
                 result.is_valid = False
