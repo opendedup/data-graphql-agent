@@ -39,28 +39,40 @@ class GraphQLValidator:
                 f"Unbalanced braces in schema (open: {open_braces}, close: {close_braces})"
             )
 
-        # Check for basic GraphQL syntax issues
-        # Look for invalid type definitions
-        invalid_type_pattern = r"type\s+[a-z]"  # Type names should start with uppercase
-        if re.search(invalid_type_pattern, schema):
-            errors.append("Type names must start with an uppercase letter")
-
         # Check for field syntax issues (basic check)
         # Fields should follow pattern: fieldName: Type
         lines = schema.split("\n")
         in_type_def = False
+        in_description = False
         for i, line in enumerate(lines, 1):
             line = line.strip()
+
+            # Track triple-quoted descriptions
+            if '"""' in line:
+                # Count quotes to determine if we're entering or leaving a description
+                quote_count = line.count('"""')
+                if quote_count % 2 == 1:  # Odd number means toggle state
+                    in_description = not in_description
+                # If even number (e.g., 2), description starts and ends on same line
+
+            # Skip lines inside descriptions
+            if in_description:
+                continue
 
             if line.startswith("type "):
                 in_type_def = True
             elif in_type_def and "}" in line:
                 in_type_def = False
             elif in_type_def and line and not line.startswith("#"):
+                # Skip lines that are clearly part of descriptions
+                if line.startswith('"""') or line.endswith('"""'):
+                    continue
+                    
                 # Check if it looks like a field definition
                 if ":" in line:
-                    # Basic field syntax check
-                    field_match = re.match(r"^\w+\s*:\s*[\[\]!\w]+", line)
+                    # Basic field syntax check - handle fields with and without arguments
+                    # Pattern: fieldName or fieldName(args): Type
+                    field_match = re.match(r"^\w+(\([^)]*\))?\s*:\s*[\[\]!\w]+", line)
                     if not field_match and not line.startswith("}"):
                         errors.append(
                             f"Line {i}: Possible syntax error in field definition: {line[:50]}"

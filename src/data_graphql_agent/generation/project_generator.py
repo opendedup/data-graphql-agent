@@ -12,13 +12,15 @@ from ..models.request_models import QueryInput
 class ProjectGenerator:
     """Generates complete Apollo GraphQL Server project."""
 
-    def __init__(self, project_id: str):
+    def __init__(self, project_id: str, gcp_location: str = "US"):
         """Initialize project generator.
 
         Args:
             project_id: Google Cloud Project ID
+            gcp_location: Google Cloud Location/Region
         """
         self.project_id = project_id
+        self.gcp_location = gcp_location
         self.schema_generator = SchemaGenerator(project_id)
 
         # Setup Jinja2 environment
@@ -116,6 +118,9 @@ class ProjectGenerator:
 
         # Generate .env.example
         files[".env.example"] = self._generate_env_example()
+        
+        # Generate .env with actual values
+        files[".env"] = self._generate_env_file()
 
         # Generate integration test stubs
         files["tests/integration/test_server_startup.py"] = (
@@ -142,14 +147,31 @@ class ProjectGenerator:
         return template.render(**context)
 
     def _generate_env_example(self) -> str:
-        """Generate .env.example file.
+        """Generate .env.example file with actual project values.
 
         Returns:
             .env.example content
         """
-        return """# BigQuery Configuration
-BIGQUERY_PROJECT_ID=your-project-id
-BIGQUERY_LOCATION=US
+        return f"""# BigQuery Configuration
+BIGQUERY_PROJECT_ID={self.project_id}
+BIGQUERY_LOCATION={self.gcp_location}
+
+# Server Configuration
+PORT=4000
+NODE_ENV=development
+"""
+
+    def _generate_env_file(self) -> str:
+        """Generate .env file with actual project values.
+        
+        This creates a working .env file for immediate use.
+
+        Returns:
+            .env content
+        """
+        return f"""# BigQuery Configuration
+BIGQUERY_PROJECT_ID={self.project_id}
+BIGQUERY_LOCATION={self.gcp_location}
 
 # Server Configuration
 PORT=4000

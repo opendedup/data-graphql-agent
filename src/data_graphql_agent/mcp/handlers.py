@@ -54,7 +54,10 @@ async def handle_generate_graphql_api(arguments: Dict[str, Any]) -> Dict[str, An
 
         # Generate project
         logger.info("Initializing ProjectGenerator...")
-        project_generator = ProjectGenerator(config.gcp_project_id)
+        project_generator = ProjectGenerator(
+            project_id=config.gcp_project_id,
+            gcp_location=config.gcp_location
+        )
         logger.info("Generating project files...")
         
         # Prepare API metadata for schema generation
