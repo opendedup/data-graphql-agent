@@ -1,0 +1,138 @@
+import { Kysely, sql } from 'kysely';
+import { BigQueryDialect } from '@maktouch/kysely-bigquery';
+import { GraphQLResolveInfo } from 'graphql';
+import graphqlFields from 'graphql-fields';
+
+/**
+ * Create Kysely instance with BigQuery dialect.
+ * This is initialized once and reused across all queries.
+ */
+export function createKyselyInstance(): Kysely<any> {
+  const projectId = process.env.BIGQUERY_PROJECT_ID;
+  const location = process.env.BIGQUERY_LOCATION || 'US';
+
+  if (!projectId) {
+    throw new Error('BIGQUERY_PROJECT_ID environment variable is required');
+  }
+
+  return new Kysely<any>({
+    dialect: new BigQueryDialect({
+      options: {
+        projectId,
+        location,
+      },
+    }),
+  });
+}
+
+/**
+ * Builds dynamic SQL query from GraphQL query using Kysely.
+ * Only selects fields requested in GraphQL query.
+ * 
+ * @param db - Kysely instance
+ * @param viewId - BigQuery view identifier (project.dataset.view)
+ * @param info - GraphQL resolve info
+ * @param args - GraphQL field arguments (user-defined filters, sorting, pagination, etc.)
+ * @returns Compiled SQL query with parameters
+ */
+export function buildQueryFromGraphQL(
+  db: Kysely<any>,
+  viewId: string,
+  info: GraphQLResolveInfo,
+  args: Record<string, any>
+): { sql: string; parameters: readonly unknown[] } {
+  // Extract requested fields from GraphQL query
+  const requestedFields = graphqlFields(info);
+  const fieldNames = Object.keys(requestedFields);
+
+  // Kysely requires table references - use sql.raw for full view ID
+  const tableRef = sql.raw(viewId);
+
+  // Build base query selecting only requested fields
+  let query = db
+    .selectFrom(tableRef.as('view'))
+    .select(fieldNames.map(field => `view.${field}` as any));
+
+  // Dynamically apply any arguments passed from GraphQL
+  // Users define their own schema arguments (filters, sorting, pagination, etc.)
+  // This function interprets common patterns but can be extended
+  
+  // Common pattern: where clause
+  if (args.where) {
+    Object.entries(args.where).forEach(([field, value]) => {
+      if (value !== null && value !== undefined) {
+        query = query.where(`view.${field}` as any, '=', value);
+      }
+    });
+  }
+
+  // Common pattern: whereIn clause
+  if (args.whereIn) {
+    Object.entries(args.whereIn).forEach(([field, values]) => {
+      if (Array.isArray(values) && values.length > 0) {
+        query = query.where(`view.${field}` as any, 'in', values);
+      }
+    });
+  }
+
+  // Common pattern: whereBetween clause
+  if (args.whereBetween) {
+    Object.entries(args.whereBetween).forEach(([field, range]) => {
+      if (Array.isArray(range) && range.length === 2) {
+        query = query
+          .where(`view.${field}` as any, '>=', range[0])
+          .where(`view.${field}` as any, '<=', range[1]);
+      }
+    });
+  }
+
+  // Common pattern: orderBy
+  if (args.orderBy) {
+    if (Array.isArray(args.orderBy)) {
+      // Multiple order by fields
+      args.orderBy.forEach((orderDef: any) => {
+        const field = orderDef.field || orderDef.column;
+        const direction = orderDef.direction || orderDef.order || 'asc';
+        if (field) {
+          query = query.orderBy(`view.${field}` as any, direction);
+        }
+      });
+    } else if (typeof args.orderBy === 'object') {
+      // Single order by or custom structure
+      // Support both { field, direction } and custom input types
+      const orderDef = args.orderBy;
+      const field = orderDef.field || orderDef.column;
+      const direction = orderDef.direction || orderDef.order || 'asc';
+      if (field) {
+        query = query.orderBy(`view.${field}` as any, direction);
+      } else {
+        // User-defined input type with field-specific sorting
+        // e.g., { title: "ASC", publishedDate: "DESC" }
+        Object.entries(orderDef).forEach(([field, direction]) => {
+          if (direction && typeof direction === 'string') {
+            query = query.orderBy(`view.${field}` as any, direction.toLowerCase() as any);
+          }
+        });
+      }
+    }
+  }
+
+  // Common pattern: limit
+  if (args.limit && typeof args.limit === 'number') {
+    query = query.limit(args.limit);
+  }
+
+  // Common pattern: offset
+  if (args.offset && typeof args.offset === 'number') {
+    query = query.offset(args.offset);
+  }
+
+  // Compile to SQL
+  const compiledQuery = query.compile();
+
+  return {
+    sql: compiledQuery.sql,
+    parameters: compiledQuery.parameters,
+  };
+}
+

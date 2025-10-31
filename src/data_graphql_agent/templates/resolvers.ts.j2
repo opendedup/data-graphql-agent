@@ -1,10 +1,11 @@
-import { GraphQLError } from 'graphql';
+import { GraphQLError, GraphQLResolveInfo } from 'graphql';
 import { GraphQLContext } from './context';
 import { DateTimeScalar } from './scalars';
+import { buildQueryFromGraphQL } from './query-builder';
 
 /**
  * GraphQL resolvers for {{ project_name }}.
- * Auto-generated from BigQuery queries with type-safe context.
+ * Auto-generated with dynamic query building using Kysely + BigQuery.
  */
 export const resolvers = {
   // Custom scalar resolvers
@@ -15,38 +16,50 @@ export const resolvers = {
     /**
      * Resolver for {{ query.queryName }}.
      * 
-     * Executes BigQuery query.
+     * BigQuery View: {{ query.view_id }}
      * Source tables: {{ query.source_tables | join(', ') }}
+     {% if query.description %}* Description: {{ query.description }}{% endif %}
      */
     {{ query.queryName }}: async (
       _parent: unknown,
-      _args: Record<string, never>, // Update with actual args type if needed
-      context: GraphQLContext
+      args: Record<string, any>,
+      context: GraphQLContext,
+      info: GraphQLResolveInfo
     ): Promise<any[]> => {
-      const { bigquery, requestId } = context;
-      const sql = `{{ query.sql | replace('`', '\\`') | replace('${', '\\${') }}`;
+      const { bigquery, kysely, requestId } = context;
       
       try {
         console.log(`[${requestId}] Executing: {{ query.queryName }}`);
         
-        // Execute BigQuery query
+        // Build dynamic SQL from GraphQL query using Kysely
+        const { sql, parameters } = buildQueryFromGraphQL(
+          kysely,
+          '{{ query.view_id }}',
+          info,
+          args
+        );
+
+        console.log(`[${requestId}] Generated SQL:`, sql);
+        console.log(`[${requestId}] Parameters:`, parameters);
+        
+        // Execute BigQuery query with parameters
         const [rows] = await bigquery.query({
           query: sql,
+          params: parameters,
           location: process.env.BIGQUERY_LOCATION || 'US',
         });
 
         console.log(`[${requestId}] Returned ${rows.length} rows from {{ query.queryName }}`);
         
-        // Return rows directly - DateTime scalar will handle serialization
         return rows;
       } catch (error) {
         console.error(`[${requestId}] Query error in {{ query.queryName }}:`, error);
         
-        // Throw GraphQLError with proper error code and extensions
         throw new GraphQLError('Failed to execute BigQuery query', {
           extensions: {
             code: 'BIGQUERY_ERROR',
             queryName: '{{ query.queryName }}',
+            viewId: '{{ query.view_id }}',
             originalError: error instanceof Error ? error.message : String(error),
             requestId: requestId,
           },

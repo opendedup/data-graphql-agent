@@ -50,12 +50,19 @@ async def test_generate_graphql_api_integration(
         "data_graphql_agent.generation.schema_generator.SchemaGenerator._get_query_schema",
         return_value=mock_schema,
     )
+    mocker.patch(
+        "data_graphql_agent.generation.view_generator.bigquery.Client"
+    )
+    mocker.patch(
+        "data_graphql_agent.generation.view_generator.ViewGenerator.create_views_for_queries",
+        return_value={"testQuery": "test-project.test_project_graphql.test_query"},
+    )
 
     # Prepare request
     arguments = {
         "queries": [
             {
-                "queryName": "testQuery",
+                "query_name": "testQuery",
                 "sql": "SELECT id, name FROM `project.dataset.table`",
                 "source_tables": ["project.dataset.table"],
             }

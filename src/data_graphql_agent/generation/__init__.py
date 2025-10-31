@@ -3,10 +3,12 @@
 from .schema_generator import SchemaGenerator
 from .resolver_generator import ResolverGenerator
 from .project_generator import ProjectGenerator
+from .view_generator import ViewGenerator
 
 __all__ = [
     "SchemaGenerator",
     "ResolverGenerator",
     "ProjectGenerator",
+    "ViewGenerator",
 ]
 

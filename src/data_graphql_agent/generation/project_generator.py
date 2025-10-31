@@ -1,11 +1,15 @@
 """Project generator that orchestrates all code generation."""
 
+import logging
 import os
 from pathlib import Path
 from typing import Dict, List, Optional
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+logger = logging.getLogger(__name__)
+
 from .schema_generator import SchemaGenerator
+from .view_generator import ViewGenerator
 from ..models.request_models import QueryInput
 
 
@@ -22,6 +26,7 @@ class ProjectGenerator:
         self.project_id = project_id
         self.gcp_location = gcp_location
         self.schema_generator = SchemaGenerator(project_id)
+        self.view_generator = ViewGenerator(project_id, gcp_location)
 
         # Setup Jinja2 environment
         templates_dir = Path(__file__).parent.parent / "templates"
@@ -68,6 +73,17 @@ class ProjectGenerator:
             for q in queries
         ]
 
+        # Create BigQuery views
+        logger.info("Creating BigQuery views...")
+        view_map = self.view_generator.create_views_for_queries(
+            project_name, query_dicts
+        )
+        
+        # Add view info to query dicts for templates
+        for query_dict in query_dicts:
+            query_dict["view_id"] = view_map.get(query_dict["queryName"])
+            logger.info(f"Query '{query_dict['queryName']}' -> View '{query_dict['view_id']}'")
+
         # Generate GraphQL schema with metadata
         schema_text, field_schemas = self.schema_generator.generate_schema_from_queries(
             query_dicts, api_metadata
@@ -78,6 +94,8 @@ class ProjectGenerator:
             "project_name": project_name,
             "queries": query_dicts,
             "schema": schema_text,
+            "project_id": self.project_id,
+            "gcp_location": self.gcp_location,
         }
 
         # Generate root files
@@ -101,6 +119,7 @@ class ProjectGenerator:
         files["src/scalars.ts"] = self._render_template("scalars.ts.j2", context)
         files["src/context.ts"] = self._render_template("context.ts.j2", context)
         files["src/errors.ts"] = self._render_template("errors.ts.j2", context)
+        files["src/query-builder.ts"] = self._render_template("query-builder.ts.j2", context)
 
         # Generate test client
         files["test-client/package.json"] = self._render_template(

@@ -1,5 +1,7 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { v4 as uuidv4 } from 'uuid';
+import { Kysely } from 'kysely';
+import { createKyselyInstance } from './query-builder';
 
 /**
  * GraphQL context interface.
@@ -9,8 +11,11 @@ export interface GraphQLContext {
   /** Unique request ID for tracing and logging */
   requestId: string;
   
-  /** BigQuery client instance */
+  /** BigQuery client instance for executing queries */
   bigquery: BigQuery;
+  
+  /** Kysely instance for building SQL queries */
+  kysely: Kysely<any>;
   
   /** Request start timestamp for performance monitoring */
   startTime: number;
@@ -21,6 +26,16 @@ export interface GraphQLContext {
   //   email: string;
   //   roles: string[];
   // };
+}
+
+// Create Kysely instance once (singleton)
+let kyselyInstance: Kysely<any> | null = null;
+
+function getKyselyInstance(): Kysely<any> {
+  if (!kyselyInstance) {
+    kyselyInstance = createKyselyInstance();
+  }
+  return kyselyInstance;
 }
 
 /**
@@ -43,6 +58,7 @@ export async function createContext(): Promise<GraphQLContext> {
       projectId: projectId,
       location: location,
     }),
+    kysely: getKyselyInstance(),
     startTime: Date.now(),
   };
 }

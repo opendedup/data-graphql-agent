@@ -22,6 +22,7 @@ def project_generator(mocker: "MockerFixture") -> ProjectGenerator:
         ProjectGenerator instance with mocked BigQuery client
     """
     mocker.patch("google.cloud.bigquery.Client")
+    mocker.patch("data_graphql_agent.generation.view_generator.bigquery.Client")
     return ProjectGenerator(
         project_id="test-project-123",
         gcp_location="us-central1"
@@ -35,6 +36,7 @@ def test_init_with_default_location(mocker: "MockerFixture") -> None:
         mocker: Pytest mocker fixture
     """
     mocker.patch("google.cloud.bigquery.Client")
+    mocker.patch("data_graphql_agent.generation.view_generator.bigquery.Client")
     generator = ProjectGenerator(project_id="test-project")
     
     assert generator.project_id == "test-project"
@@ -48,6 +50,7 @@ def test_init_with_custom_location(mocker: "MockerFixture") -> None:
         mocker: Pytest mocker fixture
     """
     mocker.patch("google.cloud.bigquery.Client")
+    mocker.patch("data_graphql_agent.generation.view_generator.bigquery.Client")
     generator = ProjectGenerator(
         project_id="test-project",
         gcp_location="europe-west1"
@@ -102,6 +105,13 @@ def test_generate_project_includes_env_files(
         return_value=("type Query { test: String }", {})
     )
     
+    # Mock the view generator
+    mocker.patch.object(
+        project_generator.view_generator,
+        "create_views_for_queries",
+        return_value={"testQuery": "test-project-123.test_project_graphql.test_query"}
+    )
+    
     queries = [
         QueryInput(
             query_name="testQuery",
@@ -124,4 +134,7 @@ def test_generate_project_includes_env_files(
     assert "BIGQUERY_LOCATION=us-central1" in files[".env.example"]
     assert "BIGQUERY_PROJECT_ID=test-project-123" in files[".env"]
     assert "BIGQUERY_LOCATION=us-central1" in files[".env"]
+    
+    # Verify the query-builder.ts file is generated
+    assert "src/query-builder.ts" in files
 

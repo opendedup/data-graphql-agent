@@ -12,11 +12,14 @@ dotenv.config();
 
 async function startServer() {
 
-  // Create Apollo Server with v4 configuration
+  // Create Apollo Server with v5 configuration
   const server = new ApolloServer<GraphQLContext>({
     typeDefs,
     resolvers,
     formatError: errorFormatter,
+    // Configure CSRF prevention for v5
+    // In production, you may want stricter settings
+    csrfPrevention: process.env.NODE_ENV === 'production',
     plugins: [
       // Apollo Studio landing page (local development only)
       ApolloServerPluginLandingPageLocalDefault({ embed: true }),
@@ -51,8 +54,8 @@ async function startServer() {
   });
 
   console.log(`🚀 Server ready at ${url}`);
-  console.log(`🏥 Health check at ${url}.well-known/apollo/server-health`);
-  console.log(`📊 GraphQL Playground at ${url}`);
+  console.log(`📊 GraphQL endpoint at ${url}graphql`);
+  console.log(`💡 Note: Use curl or GraphQL clients to query the API`);
   console.log(`🔍 Introspection: ${process.env.NODE_ENV !== 'production' ? 'enabled' : 'disabled'}`);
 
   // Handle graceful shutdown
